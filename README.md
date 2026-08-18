@@ -1,6 +1,6 @@
-# Gestiune Activități
+# 🎯 FocusHub
 
-Aplicație desktop în **C++17/20** cu interfață grafică **Qt** pentru gestionarea unei liste de activități (denumire, descriere, tip, durată). Proiect realizat ca temă de laborator, respectând principii de arhitectură software: **layered architecture** (Domain – Repository – Service – GUI), **Model-View** (Qt), **Observer**, **Undo/Command** și persistență în fișier.
+Aplicație de productivitate cu interfață în **HTML/CSS/JavaScript**, ce rulează atât ca aplicație desktop (**Electron**), cât și direct în browser (ex. GitHub Pages). Permite gestionarea sarcinilor zilnice, a unei liste "someday" (wishlist) și a unui spațiu creativ pentru idei ("Dreams" — mind map, scratchpad, citate), cu persistență locală a datelor.
 
 ## Cuprins
 
@@ -8,127 +8,128 @@ Aplicație desktop în **C++17/20** cu interfață grafică **Qt** pentru gestio
 - [Arhitectură](#arhitectură)
 - [Structura proiectului](#structura-proiectului)
 - [Cerințe](#cerințe)
-- [Compilare și rulare](#compilare-și-rulare)
-- [Testare](#testare)
+- [Instalare și rulare](#instalare-și-rulare)
+- [Build (aplicație desktop)](#build-aplicație-desktop)
+- [Demo live (browser)](#demo-live-browser)
 - [Detalii de implementare](#detalii-de-implementare)
 - [Limitări cunoscute / TODO](#limitări-cunoscute--todo)
 
 ## Funcționalități
 
-**Fereastra principală**
-- Adăugare, modificare, ștergere activități (CRUD complet), cu validare a datelor.
-- Filtrare după tip și după descriere.
-- Sortare după denumire, descriere sau durată (sortarea după durată grupează întâi pe tip).
-- Raport agregat pe tipuri de activități (număr de activități + durată totală), afișat și ca butoane dinamice.
-- **Undo** pentru ultimele operații (adăugare/ștergere/modificare), cu istoric vizibil.
-- Persistență automată în fișier text (`activitati.txt`) — datele se încarcă la pornire și se salvează după fiecare modificare.
+**Tab Focus**
+- Adăugare, editare, ștergere task-uri (titlu, descriere, subtask-uri, categorie, nivel de energie, deadline, durată estimată).
+- Grupare automată pe categorii, cu secțiuni pliabile.
+- Reordonare task-uri prin drag & drop, în cadrul aceleiași categorii.
+- Bară de progres zilnică și pastilă rezumat ("X/Y complete • timp rămas").
+- Sortare inteligentă (deadline + nivel de energie, cu boost pentru dimineață).
 
-**Fereastra "Coș" (listă de lucru secundară)**
-- Adăugare activități existente într-o listă separată de lucru ("coșul").
-- Generare aleatoare de N activități din repository în coș.
-- Export coș în format **CSV** și **HTML**.
-- A doua fereastră, read-only, desenează grafic (cercuri) numărul curent de activități din coș și se actualizează automat prin pattern-ul **Observer** de fiecare dată când coșul se modifică.
+**Tab Insights**
+- Progres zilnic (procent, total, rămase, timp rămas).
+- Streak (zile consecutive cu task-uri finalizate).
+- Grafic de distribuție pe categorii.
+
+**Tab Wishlist**
+- Listă "someday" de idei, organizate pe categorii (cărți, cursuri, skill-uri, travel, altele).
+- Filtrare rapidă pe categorie.
+- Conversie a unei idei într-un task cu deadline, direct din wishlist ("→ Calendar").
+
+**Tab Dreams**
+- **Mind Map** — canvas interactiv cu noduri: adăugare, mutare (drag), pan & zoom, conectare noduri (click dreapta), notițe per nod, trimitere notă în Focus ca task.
+- **Scratchpad** — notițe libere, salvate automat (debounce).
+- **Inspirație** — citate personale, cu selecție aleatoare și listă rapidă de administrare.
+
+**General**
+- Temă comutabilă Aurora ↔ Forge, persistată local.
+- Titlebar personalizat (pin/minimize/close) — activ doar în Electron.
+- Scurtături de la tastatură (`Ctrl+N` task nou, `Ctrl+1..4` schimbare tab, `Esc` închide formulare/modaluri).
+- Confirmări custom (fără `confirm()` nativ, blocat în Electron) și toast-uri de feedback.
 
 ## Arhitectură
 
 ```
-        ┌───────────────┐
-        │   MainWindow   │   ◄── GUI principal (CRUD, filtrare, sortare, raport, undo)
-        │  ListaWindow   │   ◄── GUI secundar (coș: adaugă / generează / exportă)
-        │ CosReadOnlyGUI │   ◄── GUI read-only, desenează coșul (Observer)
-        └───────┬────────┘
-                │ MyTableModel (QAbstractTableModel)
-        ┌───────▼────────┐
-        │    Service     │   ◄── logică de business, validare, undo, raport
-        └───────┬────────┘
-                │
-        ┌───────▼────────┐
-        │  Repo (interfață)│ ◄── appRepo (vector) / appRepoMap (unordered_map + eroare probabilistică)
-        │    FileRepo      │ ◄── decorator peste appRepo, persistă în fișier text
-        └───────┬────────┘
-                │
-        ┌───────▼────────┐
-        │    Domain      │   ◄── clasa Activitate
-        └────────────────┘
+        ┌─────────────────────┐
+        │      index.html      │   ◄── structura UI (tab-uri, formulare, modaluri, canvas)
+        └──────────┬───────────┘
+                    │
+        ┌───────────▼───────────┐
+        │        app.js          │   ◄── toată logica aplicației (render, state, evenimente,
+        │                        │       mind map pe canvas, persistență prin `api`)
+        └───────────┬────────────┘
+                    │ window.focusAPI (interfață comună get/set/delete/minimize/close/togglePin)
+        ┌───────────┴────────────┐
+        │                         │
+┌───────▼────────┐      ┌─────────▼─────────┐
+│  preload.js     │      │  browser-shim.js   │
+│ (Electron only) │      │  (browser only)    │
+│ contextBridge → │      │ localStorage direct │
+│ ipcRenderer     │      └────────────────────┘
+└───────┬─────────┘
+        │ IPC (store-get/set/delete, minimize/close/toggle-always-on-top)
+┌───────▼─────────┐
+│     main.js       │   ◄── proces principal Electron, BrowserWindow, electron-store
+└────────────────────┘
 ```
 
-**Pattern-uri folosite:**
-- **Repository** — interfața abstractă `Repo`, cu două implementări (`appRepo` pe `std::vector`, `appRepoMap` pe `std::unordered_map` cu simulare de eșec aleator) și un decorator `FileRepo` care adaugă persistență pe disc.
-- **Service Layer** — clasa `service` centralizează logica (validare, undo, filtrare, sortare, raport) și expune un singur punct de intrare pentru GUI.
-- **Observer** — `ListaActivitati` ("coșul") e `Observable`; `ListaWindow` și `CosReadOnlyGUI` sunt `Observer` și se actualizează automat la orice modificare a coșului.
-- **Model-View (Qt)** — `MyTableModel : QAbstractTableModel` alimentează `QTableView`-urile, fără manipulare manuală rând-cu-rând.
-- **Command / Undo** — `ActiuneUndo` (interfață) cu implementările `UndoAdauga`, `UndoSterge`, `UndoModifica`, stocate într-un istoric (`std::vector<std::unique_ptr<ActiuneUndo>>`).
-- **Validare** — `ActivitateValidator` centralizează regulile de validitate pentru o `Activitate`, aruncând `ValidationException`.
+**Idee centrală:** `app.js` nu știe niciodată dacă rulează în Electron sau în browser — folosește mereu același obiect `window.focusAPI`. `preload.js` îl expune prin `contextBridge` (Electron, cu `contextIsolation: true`), iar `browser-shim.js` îl simulează pe `localStorage` când `preload.js` nu există (browser). Acest lucru permite ca aceeași bază de cod UI să funcționeze identic pe ambele platforme.
 
 ## Structura proiectului
 
 ```
-├── Domain.h / Domain.cpp          # Entitatea Activitate
-├── repo.h / repo.cpp              # Repo (interfata), appRepo, appRepoMap, RepoException
-├── FileRepo.h                     # Decorator peste appRepo cu persistenta in fisier text
-├── validators.h                   # ActivitateValidator, ValidationException
-├── undo.h                         # ActiuneUndo, UndoAdauga, UndoSterge, UndoModifica
-├── raport.h                       # GenRaportDTO
-├── Observer.h                     # Observer / Observable
-├── lista_activitati.h / .cpp      # ListaActivitati ("cosul"), export CSV/HTML
-├── service.h / service.cpp        # Stratul de business logic
-├── MyTableModel.h                 # QAbstractTableModel pentru Model-View
-├── MainWindow.h / .cpp            # Fereastra principala (CRUD, filtrare, sortare, raport, undo)
-├── ListaWindow.h / .cpp           # Fereastra secundara pentru "cos"
-├── CosReadOnlyGUI.h               # Fereastra read-only, desen grafic (Observer)
-├── myvector.h                     # Container generic MyVector<T> (iteratori custom)
-├── test.h / test.cpp              # Suita de teste (assert-based)
-└── main.cpp                       # Punct de intrare (testAll() + pornire aplicatie Qt)
+├── index.html          # Structura UI: titlebar, tab-uri (Focus/Insights/Wishlist/Dreams), modaluri
+├── style.css            # Stilizare completă, inclusiv temele Aurora / Forge
+├── app.js               # Logica aplicației: state, randare, mind map (canvas), persistență
+├── preload.js           # Bridge Electron: expune focusAPI prin contextBridge (contextIsolation)
+├── browser-shim.js      # Fallback pentru rulare în browser: focusAPI pe bază de localStorage
+├── main.js               # Proces principal Electron: fereastră, IPC, electron-store
+├── package.json          # Dependențe și scripturi (start, build)
+├── package-lock.json     # Lockfile npm
+├── dist/                 # Output-ul de build (generat, nu se versionează manual)
+├── node_modules/         # Dependențe instalate (generat de npm install)
+└── .gitignore
 ```
 
 ## Cerințe
 
-- Compilator C++ cu suport **C++20** (folosește `std::ranges`, `std::construct_at`).
-- **Qt 5** sau **Qt 6** (module: `Core`, `Gui`, `Widgets`).
-- **CMake** ≥ 3.16 (sau Qt Creator, care detectează automat proiectul).
+- **Node.js** ≥ 18 și **npm**.
+- **Electron** (instalat ca dependență de proiect, via `npm install`).
+- Browser modern (Chrome/Edge/Firefox) dacă se rulează varianta web, fără build.
 
-## Compilare și rulare
-
-### Cu Qt Creator
-1. Deschide `CMakeLists.txt` (sau fișierul `.pro`, după caz) în Qt Creator.
-2. Configurează kit-ul (compilator + versiune Qt).
-3. Build & Run.
-
-### Din linia de comandă (CMake)
+## Instalare și rulare
 
 ```bash
-mkdir build && cd build
-cmake .. -DCMAKE_PREFIX_PATH=<calea_catre_Qt>
-cmake --build .
-./NumeExecutabil
+git clone https://github.com/girafarafa/FocusHub.git
+cd FocusHub
+npm install
+npm start
 ```
 
-> La pornire, `main.cpp` rulează automat suita de teste (`testAll()`) înainte de a deschide interfața grafică — dacă un test eșuează (`assert`), aplicația se oprește în consolă înainte de a arăta fereastra.
+`npm start` pornește aplicația ca fereastră Electron (fără bară de titlu nativă, always-on-top implicit, dimensiune ~520×820px).
 
-Datele activităților sunt persistate în `activitati.txt`, creat/citit automat de `FileRepo` din directorul curent de lucru.
+> Pentru rulare directă în browser, fără Electron, e suficient să deschizi `index.html` printr-un server local (ex. extensia Live Server) — `browser-shim.js` preia automat rolul de persistență prin `localStorage`.
 
-## Testare
+## Build (aplicație desktop)
 
-Testele sunt scrise cu `assert()` (fără framework extern) și acoperă:
+```bash
+npm run build
+```
 
-- `Domain` — getteri/setteri.
-- `Repo` (`appRepo`) — add / find / modifica / sterge / duplicate / inexistente.
-- `Service` — CRUD, validare, filtrare, sortare, raport, undo (adaugă/șterge/modifică, undo multiplu, undo fără istoric).
-- `ListaActivitati` (coș) — adăugare, golire, generare aleatoare, export CSV/HTML.
-- `appRepoMap` — comportament cu probabilitate de eroare (0.0 și 1.0).
-- `FileRepo` — persistență pe disc (creare, citire, modificare, ștergere, verificate prin re-instanțiere).
+Genereaza executabilul/instalerul în folderul `dist/` (pe baza configurației din `package.json`, de obicei prin `electron-builder`).
 
-Rulare: testele pornesc automat la fiecare lansare a aplicației, din `main()`, prin `testAll()`.
+## Demo live (browser)
+
+👉 **[Deschide FocusHub Live](https://girafarafa.github.io/FocusHub/)**
 
 ## Detalii de implementare
 
-- **Validare** (`validators.h`): o activitate e validă dacă denumirea, descrierea și tipul au minim 2 caractere, iar durata e strict pozitivă.
-- **Undo**: fiecare operație de scriere (adaugă/șterge/modifică) își salvează inversul în istoric; `service::undo()` execută și elimină ultima acțiune.
-- **appRepoMap**: implementare alternativă de repository ce simulează eșecuri aleatoare (utilă pentru testarea robusteței / gestionării excepțiilor), cu o probabilitate configurabilă la construcție.
-- **Export**: `ListaActivitati::exportCSV/exportHTML` scriu coșul curent pe disc; apelate din GUI prin dialog de salvare (`QFileDialog`).
+- **Persistență**: toate datele (task-uri, wishlist, scratchpad, citate, mind map, temă) sunt salvate sub o singură cheie versionată (`focushub-data`, `version: 2`), cu migrare automată din chei vechi la prima încărcare.
+- **Task-uri**: un task e considerat finalizat fie explicit (`done: true`), fie implicit când toate subtask-urile sale sunt bifate.
+- **Sortare**: task-urile sunt ordonate după deadline, ajustat cu o pondere pe nivelul de energie (`low/medium/high`), amplificată dimineața (înainte de ora 12).
+- **Mind map**: desenat integral pe `<canvas>`, cu transformări proprii pan/zoom (`toCanvas`/`toWorld`), conectare noduri prin click dreapta + click stânga, și modal de detalii per nod (notițe, legătură cu un task din Focus).
+- **Confirmări**: `window.confirm()` este blocat de Electron în anumite configurații, deci ștergerile (task, nod) folosesc un toast de confirmare custom (`confirmAction`).
 
 ## Limitări cunoscute / TODO
 
-- `MyVector<T>` (container generic cu iteratori proprii) este implementat, dar neintegrat momentan în restul aplicației (repository-urile folosesc `std::vector`) — util ca exercițiu separat de structuri de date.
-- Testarea iteratorilor `MyVector` nu este încă acoperită.
-- Poziționarea desenelor din `CosReadOnlyGUI` folosește `rand()` fără resetare explicită a seed-ului (`srand`); comportamentul aleator e reproductibil identic la fiecare rulare a aplicației.
+- Randarea mind map-ului pe `<canvas>` nu ține cont încă de `devicePixelRatio`, deci pe ecrane High-DPI (Retina/4K) desenul poate apărea neclar.
+- `saveData()` / apelurile către `focusAPI` nu au gestionare explicită de erori (ex. `localStorage` plin) — un eșec la salvare nu e semnalat vizibil utilizatorului.
+- Butoanele din titlebar (`pin`/`minimize`/`close`) au doar `title`, fără `aria-label`, pentru accesibilitate screen-reader.
+- Nu există încă teste automate (unit/integration) pentru logica din `app.js`.
