@@ -109,9 +109,34 @@ void ListaWindow::onGoleste() { serv.golesteLista(); } //automat
 void ListaWindow::onGenereaza() { int n = inputNrAleator->value(); serv.genereazaAleator(n); } // automat
 
 void ListaWindow::onExportCSV() {
-    // Adaugă codul tău de export CSV aici
+    QString fisier = QFileDialog::getSaveFileName(this, "Export CSV", "", "CSV (*.csv)");
+    if (fisier.isEmpty()) return;
+    try {
+        serv.getCosObj().exportCSV(fisier.toStdString()); // sau echivalent din service.h
+        QMessageBox::information(this, "Export", "Export realizat cu succes!");
+    } catch (const std::exception& e) {
+        QMessageBox::warning(this, "Eroare", e.what());
+    }
 }
 
 void ListaWindow::onExportHTML() {
-    // Adaugă codul tău de export HTML aici
+    if (serv.getLista().empty()) {
+        QMessageBox::information(this, "Export HTML", "Lista este goala, nu ai ce exporta!");
+        return;
+    }
+
+    QString fisier = QFileDialog::getSaveFileName(
+        this, "Export HTML", "", "Fisiere HTML (*.html)");
+    if (fisier.isEmpty()) return; // utilizatorul a anulat dialogul
+
+    if (!fisier.endsWith(".html", Qt::CaseInsensitive))
+        fisier += ".html";
+
+    try {
+        serv.getCosObj().exportHTML(fisier.toStdString());
+        QMessageBox::information(this, "Export HTML", "Export realizat cu succes!");
+    } catch (const std::exception& e) {
+        QMessageBox::warning(this, "Eroare", e.what());
+    }
 }
+
